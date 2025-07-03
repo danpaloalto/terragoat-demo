@@ -1,0 +1,44 @@
+name: Prisma Cloud - Scan All Branches
+
+on:
+  schedule:
+    - cron: '0 3 * * 1'  # Every Monday at 3:00 AM UTC
+  workflow_dispatch:      # Optional: manual trigger
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+
+    env:
+      PRISMA_API_URL: https://api0.prismacloud.io   # Change if you're in EU, etc.
+      PRISMA_ACCESS_KEY: ${{ secrets.PRISMA_ACCESS_KEY }}
+      PRISMA_SECRET_KEY: ${{ secrets.PRISMA_SECRET_KEY }}
+
+    steps:
+      - name: Checkout all branches
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Fetch full history + all branches
+
+      - name: Download Prisma Cloud CLI
+        run: |
+          curl -sSL https://prisma.pan.dev/download/latest/cli/linux -o prisma-cloud-scan
+          chmod +x prisma-cloud-scan
+
+      - name: Loop through branches and scan
+        run: |
+          echo "Fetching remote branches..."
+          for branch in $(git for-each-ref --format='%(refname:short)' refs/remotes/origin/ | grep -v HEAD); do
+            echo "==============================="
+            echo "📦 Scanning branch: $branch"
+            git checkout -f "$branch"
+
+            # Optional: skip branches you don't want
+            # if [[ "$branch" == "origin/ignore-this" ]]; then continue; fi
+
+            ./prisma-cloud-scan \
+              --ci \
+              --branch "${branch#origin/}" \
+              --repo-url "$GITHUB_REPOSITORY" \
+              --path .
+          done
